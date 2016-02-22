@@ -1,43 +1,132 @@
 #!/usr/bin/env python
 
 from __future__ import print_function
-import socket
+
+import os
 import sys
+import time
+import socket
+import logging
+import argparse
+
+
+help_text = """
+
+This program logs gyro/accel data from the IMU+GPS-Sensorstream
+android application
+(https://play.google.com/store/apps/details?id=de.lorenz_fenster.sensorstreamgps&hl=en)
+
+"""
 
 filename = "output.csv"
 
+log_filename_template = "imu_sensorstream_log_{}.csv"
+DEFAULT_PORT = 8190
+PACKET_SIZE = 4096
+argparse_formatter = argparse.ArgumentDefaultsHelpFormatter
+
+
+def validate_data(raw_data_string):
+    """
+    attempts to parse raw_data_string as a csv line, raises if it fails
+    """
+    if raw_data_string is None:
+        raise(Exception("invalid data: data is NULL"))
+
+    values = [value.strip() for value in raw_data_string.strip().split(',')]
+    if not (len(values) - 1) % 4 == 0:
+        raise(Exception("invalid data: number of values"))
+
+    values = [float(value) for value in values]
+    return values
+
+
+def format_values(values):
+    """
+    returns string representation of values that excel can understand
+    """
+    result = ', '.join([repr(value) for value in values])
+    return result
+
+
+def values_to_dict(values):
+    results = {}
+    # values[0] is the timestamp
+    # we
+    return results
+
 
 def main():
+
+    parser = argparse.ArgumentParser(description=help_text,
+                                     formatter_class=argparse_formatter)
+
+    output_help = "the relative directory to place logged data in"
+    parser.add_argument('--output', '--dst', dest='output_file',
+                        help=output_help, default='./imu_data/')
+
+    verbose_help = "if set, these flags force debug info to be sent to stderr"
+    parser.add_argument('--debug', '--verbose', '-d', '-v', dest='verbose',
+                        action="store_true", help=verbose_help)
+
+    port_help = "the port number to open a UDP connection on"
+    parser.add_argument('--port', '-p', dest='port', default=DEFAULT_PORT,
+                        help=port_help, type=int)
+
+    args = parser.parse_args()
+
+    output_dir = args.output_file
+    verbose = args.verbose
+    port = args.port
+
+    log = logging.getLogger('data_logger')
+    log.setLevel(logging.INFO)
+    timestamp = repr(time.time()).replace('.', '-')
+    log_filename = os.path.join(output_dir,
+                                log_filename_template.format(timestamp))
+    # ensure log file exists:
+    if not os.path.exists(os.path.dirname(log_filename)):
+        os.makedirs(os.path.dirname(log_filename))
+    try:
+        with open(log_filename, 'a'):
+            pass
+    except:
+        print("Couldn't open log file {} ... exiting now".format(log_filename),
+              file=sys.stderr)
+        return
+
+    log_file_handler = logging.FileHandler(log_filename, mode='w+')
+    log.addHandler(log_file_handler)
+
+    stderr = logging.getLogger('stderr')
+    if verbose:
+        stderr.setLevel(logging.DEBUG)
+    else:
+        stderr.setLevel(logging.ERROR)
+    stderr.addHandler(logging.StreamHandler())
+
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    PORT_NUM = 8190
-    addr = ("", PORT_NUM)
+    addr = ("", port)
+
+    # i'm just gonna put everything in here for a while so we can
+    # have access to it later
+    results = []
+
     sock.bind(addr)
 
-    with open(filename, "w") as f:
-        while True:
-            try:
-                data = sock.recv(4096)
-                vals = data.split(',')
-                vals = [val.strip() for val in vals]
-                if not len(vals) % 4 == 1:
-                    print("couln't understand data", file=sys.stderr)
-                timestamp = vals[0]
+    while True:
+        try:
+            data = sock.recv(PACKET_SIZE)
+            values = validate_data(data)
+            log.info(format_values(values))
+            values_dict = values_to_dict(values)
+            results.append(values_dict)
+        except KeyboardInterrupt:
+            break
+        except Exception as e:
+            stderr.error(e)
+            pass
 
-                """
-                note we have to take care of the index (i.e. 3, 4)
-                """
-
-                # samples = [vals[i:i + 4] for i in range(1, (len(vals) - 1) / 4, 4)]
-                # samples = [vals[(1 + 3 * i):min(3 + 3 * i, len(vals) + 1)] for i in range((len(vals) - 1) / 3)]
-                # samples = [{samples[i][0]: samples[i][1:]}]
-                print(data, file=f)
-                # print(data)
-                # print(samples)
-            except KeyboardInterrupt:
-                break
-            except Exception as e:
-                print(e, file=sys.stderr)
-                pass
     sock.close()
 
 
