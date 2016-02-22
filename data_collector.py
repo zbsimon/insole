@@ -37,7 +37,14 @@ def validate_data(raw_data_string):
     if not (len(values) - 1) % 4 == 0:
         raise(Exception("invalid data: number of values"))
 
-    values = [float(value) for value in values]
+    # ensure every 4i+1 value is an int
+    try:
+        for i in range(1, len(values) - 1, 4):
+            values[i] = int(values[i])
+    except ValueError:
+        raise(Exception("invalid data: index columns must be integers"))
+
+    values = [value if type(value) is int else float(value) for value in values]
     return values
 
 
@@ -51,8 +58,9 @@ def format_values(values):
 
 def values_to_dict(values):
     results = {}
-    # values[0] is the timestamp
-    # we
+    results['timestamp'] = values[0]
+    for i in range(1, len(values), 4):
+        results[values[i]] = values[(i + 1):(i + 4)]
     return results
 
 
@@ -121,6 +129,7 @@ def main():
             log.info(format_values(values))
             values_dict = values_to_dict(values)
             results.append(values_dict)
+            stderr.debug(values_dict)
         except KeyboardInterrupt:
             break
         except Exception as e:
