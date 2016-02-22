@@ -18,7 +18,6 @@ android application
 
 """
 
-filename = "output.csv"
 
 log_filename_template = "imu_sensorstream_log_{}.csv"
 DEFAULT_PORT = 8190
