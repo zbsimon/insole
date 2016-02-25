@@ -4,6 +4,7 @@ from __future__ import print_function
 
 import os
 import sys
+import ast
 import time
 import socket
 import logging
@@ -23,6 +24,19 @@ log_filename_template = "imu_sensorstream_log_{}.csv"
 DEFAULT_PORT = 8190
 PACKET_SIZE = 4096
 argparse_formatter = argparse.ArgumentDefaultsHelpFormatter
+
+
+def update_globals(samples):
+    latest_sample = samples[-1]
+    latest_sample_as_string = ""
+    delim = ","
+    for key, value in sorted(latest_sample.items()):
+        if key in ['timestamp', 3, 81]:
+            latest_sample_as_string += value + delim
+    latest_sample_as_string.trim(delim)
+
+    # may want to log this instead
+    print(latest_sample_as_string)
 
 
 def validate_data(raw_data_string):
@@ -80,17 +94,30 @@ def main():
     parser.add_argument('--port', '-p', dest='port', default=DEFAULT_PORT,
                         help=port_help, type=int)
 
+    replay_help = "DON'T begin a server and INSTEAD proceed by reading samples from REPLAY_FILE"
+    parser.add_argument('--replay', '-r', dest='replay_file', help=replay_help, default=None)
+
     args = parser.parse_args()
 
     output_dir = args.output_file
     verbose = args.verbose
     port = args.port
+    replay_file = args.replay_file
 
     log = logging.getLogger('data_logger')
     log.setLevel(logging.INFO)
     timestamp = repr(time.time()).replace('.', '-')
     log_filename = os.path.join(output_dir,
                                 log_filename_template.format(timestamp))
+
+    if replay_file is not None:
+        with open(replay_file, 'r') as f:
+            data = []
+            for line in f:
+                data.append(ast.literal_eval(line))
+                update_globals(data)
+        return
+
     # ensure log file exists:
     if not os.path.exists(os.path.dirname(log_filename)):
         os.makedirs(os.path.dirname(log_filename))
@@ -129,6 +156,7 @@ def main():
             values_dict = values_to_dict(values)
             results.append(values_dict)
             stderr.debug(values_dict)
+            update_globals(values_dict)
         except KeyboardInterrupt:
             break
         except Exception as e:
