@@ -29,12 +29,13 @@ argparse_formatter = argparse.ArgumentDefaultsHelpFormatter
 def update_globals(samples):
     latest_sample = samples[-1]
     latest_sample_as_string = ""
-    delim = ","
-    for key, value in sorted(latest_sample.items()):
-        if key in ['timestamp', 3, 81]:
-            latest_sample_as_string += value + delim
-    latest_sample_as_string.trim(delim)
-
+    delim = ', '
+    try:
+        latest_sample_as_string += latest_sample['timestamp'] + delim
+        latest_sample_as_string += delim.join(latest_sample[3]) + delim
+        latest_sample_as_string += delim.join(latest_sample[81]) + delim
+    except:
+        return
     # may want to log this instead
     print(latest_sample_as_string)
 
@@ -156,12 +157,13 @@ def main():
             values_dict = values_to_dict(values)
             results.append(values_dict)
             stderr.debug(values_dict)
-            update_globals(values_dict)
+            update_globals(results)
         except KeyboardInterrupt:
             break
         except Exception as e:
-            stderr.error(e)
-            pass
+            stderr.error(repr(e))
+            # robust!
+            # pass
 
     sock.close()
 
